@@ -377,7 +377,7 @@ def dir_size(redirector: str, directory: str, show_output=True) -> int:
     """
     dirsize = stat_dir(redirector, directory, False, True)  # don't show output, get size
     GiB = dirsize / (1 << 30)
-    log.debug(f'[Debug] Directory size of {directory}: GiB: {GiB} (No sub-directories. Files only!)')
+    log.debug(f'[Debug] Directory size of {directory}: GiB: {GiB}')
     if show_output:
         log.info(f'Byte: {dirsize} (GiB: {GiB}G)')
     return dirsize
