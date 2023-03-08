@@ -362,6 +362,7 @@ def stat_dir(redirector: str, directory: str, show_output=True, get_size=False) 
 def dir_size(redirector: str, directory: str, show_output=True) -> int:
     """
     Returns the directory size, calculated by the stat_dir function.
+    To prevent spam, the subdirectories with sizes are only listed on DEBUG loglevel.
 
     Parameters
     ----------
@@ -374,9 +375,9 @@ def dir_size(redirector: str, directory: str, show_output=True) -> int:
     int
         directory size in Byte
     """
-    log.debug(f'[Debug] Get directory size of {directory}')
     dirsize = stat_dir(redirector, directory, False, True)  # don't show output, get size
     GiB = dirsize / (1 << 30)
+    log.debug(f'[Debug] Directory size of {directory}: GiB: {GiB} (No sub-directories. Files only!)')
     if show_output:
         log.info(f'Byte: {dirsize} (GiB: {GiB}G)')
     return dirsize
@@ -577,8 +578,7 @@ def del_dir(redirector: str, directory: str, user: str, ask=True) -> None:
 
     if str(input(f'Are you sure to delete the following directory: {directory}? ')) == 'y':
         for file in listing:  # unfortunately, there is no recursive way in xrd...
-            print(file)
-            log.info(f'{redirector}{listing.parent}{file.name}')
+            log.debug(f'{redirector}{listing.parent}{file.name}')
             if file.statinfo.size == 512:  # check if "file" is a directory -> delete recursively
                 log.debug(f'[rm dir] list entry: {file}')
                 assert (file.statinfo.flags == 51 or file.statinfo.flags == 19)  # make sure it is a directory; evtl wrong permissions?

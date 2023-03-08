@@ -62,7 +62,7 @@ log.info(f'Redirector selected: {redirector}')
 # set and check base path
 basepath = args["basepath"]
 log.info(f'Selected base path: {basepath}')
-if basepath[0] != '/' or basepath[-1] != '/':
+if len(basepath) > 0 and (basepath[0] != '/' or basepath[-1] != '/'):
     exit('The base path has to begin and end with a "/"!')
 
 log.info(f'Current base path: {basepath}')
@@ -307,7 +307,7 @@ while True:
             '<interactive ls>': 'interactive ls through the energy FTW!',
             '<stat>': 'xrdfs stat on file or directory',
             '<stat directory>': 'xrdfs stat on directory content',
-            '<dir size>': 'prints the size of the directory',
+            '<dir size>': 'prints the size of the directory. With DEBUG: gives sizes of sub-dirs',
             '<rm file>': 'remove a file from remote',
             '<interactive file rm>': 'select a file on CLI to remove',
             '<rm dir>': 'remove a directory on remote',
