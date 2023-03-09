@@ -575,19 +575,27 @@ def del_dir(redirector: str, directory: str, user: str, ask=True) -> None:
 
     log.info(f'The following files will be deleted within {directory}:')
     ls(redirector, directory)  # list the directory content that will be deleted
-
-    if str(input(f'Are you sure to delete the following directory: {directory}? ')) == 'y':
-        for file in listing:  # unfortunately, there is no recursive way in xrd...
-            log.debug(f'{redirector}{listing.parent}{file.name}')
-            if file.statinfo.size == 512:  # check if "file" is a directory -> delete recursively
-                log.debug(f'[rm dir] list entry: {file}')
-                assert (file.statinfo.flags == 51 or file.statinfo.flags == 19)  # make sure it is a directory; evtl wrong permissions?
-                del_dir(redirector, listing.parent + file.name, user, True)
-            else:
-                del_file(redirector, listing.parent + file.name, user, False)
-    else:
-        log.critical('failed.')
-        return None
+    if ask:
+        if str(foo:=input(f'Are you sure to delete the following directory: {directory}? (y/n/all)')) == 'y':
+            print("Will delete with ask=True")
+            ask = True
+        elif foo == 'all':
+            print("Will delete with ask=False")
+            ask = False
+        elif foo == 'n':
+            log.info('Nothing deleted.')
+            return None
+        else:
+            log.critical('failed.')
+            return None
+    for file in listing:  # unfortunately, there is no recursive way in xrd...
+        log.debug(f'{redirector}{listing.parent}{file.name}')
+        if file.statinfo.size == 512:  # check if "file" is a directory -> delete recursively
+            log.debug(f'[rm dir] list entry: {file}')
+            assert (file.statinfo.flags == 51 or file.statinfo.flags == 19)  # make sure it is a directory; evtl wrong permissions?
+            del_dir(redirector, listing.parent + file.name, user, ask)
+        else:
+            del_file(redirector, listing.parent + file.name, user, False)
 
     status, _ = myclient.rmdir(directory)  # when empty, remove empty dir
     log.debug(f'[rm dir] rm status: {status}')
