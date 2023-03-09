@@ -359,6 +359,33 @@ def stat_dir(redirector: str, directory: str, show_output=True, get_size=False) 
     return dirsize
 
 
+def get_file_size(redirector: str, file: str) -> int:
+    """
+    Returns the file size, calculated by the stat function.
+    To prevent spam, the file size is only listed on DEBUG loglevel.
+
+    Parameters
+    ----------
+    redirector  : str
+    file        : str
+    show_output : bool
+
+    Returns
+    -------
+    int
+        file size in Byte
+    """
+    myclient = client.FileSystem(redirector)
+    status, listing = myclient.stat(file, DirListFlags.STAT)  # use FS.stat!
+
+    # check if file or dir exists
+    if not _exists(redirector, file):
+        log.debug(f'[stat] Status: {status}')
+        log.info('The file or directory does not exist!')
+        return None
+
+    return listing.size
+
 def dir_size(redirector: str, directory: str, show_output=True, acc_size=0) -> int:
     """
     Returns the directory size, calculated by the stat_dir function.
@@ -578,7 +605,7 @@ def del_dir(redirector: str, directory: str, user: str, ask=True, verbose=True) 
         log.info(f'The following files will be deleted within {directory}:')
         ls(redirector, directory)  # list the directory content that will be deleted
     if ask:
-        if str(reply:=input(f'Are you sure to delete the following directory: {directory}? (y/n/all)')) == 'y':
+        if str(reply:=input(f'Are you sure to delete the following directory: {directory}? (y/n/all) ')) == 'y':
             log.info("Will delete with ask=True")
             ask = True
         elif reply == 'all':
