@@ -83,6 +83,7 @@ while True:
                                          'rm file',
                                          'interactive file rm',
                                          'rm dir',
+                                         'interactive dir rm',
                                          'mv',
                                          'mkdir',
                                          'copy file to',
@@ -203,6 +204,34 @@ while True:
             _filepath=questionary.text(f'Which directory do you want to delete? \n >{basepath}')
         ).ask()
         del_dir(redirector, basepath + answers1["_filepath"], user, ask=True)
+
+    ########## interactive dir rm ##########
+    if answers["_function"] == 'interactive dir rm':
+        answers1 = questionary.form(
+            _directory=questionary.text(f'In which directory you want to delete folders? \n>{basepath}')
+        ).ask()
+        dirs, files = interactive_ls(redirector, basepath + answers1["_directory"])
+        # now use questionary checkbox to select the files and dirs to delete
+        choices = ['exit'] + dirs + files
+        answers2 = questionary.checkbox('Which files and directories should be DELETED?', choices=choices).ask()
+        if 'exit' in answers2:
+            break
+        else:
+            # ask user if he want to check all files and dirs before deleting
+            answers3 = questionary.confirm('[WARNING] Do you want to check all files and directories before deleting? (y/n)').ask()
+            if answers3:
+                ask = True
+            else:
+                ask = False
+            for selection in answers2:
+                if _check_file_or_directory(redirector, selection) == 'dir':
+                    log.info(f'Deleting {selection}')
+                    del_dir(redirector, selection, user, ask, verbose=False)
+                else:
+                    log.info(f'Deleting {selection}')
+                    del_file(redirector, selection, user, ask, verbose=False)
+
+
 
     ########## mv ##########
     if answers["_function"] == "mv":

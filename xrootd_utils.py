@@ -1,5 +1,6 @@
 import logging
 from typing import Tuple, Dict, Any, List
+import sys
 # import argparse
 
 
@@ -359,7 +360,7 @@ def stat_dir(redirector: str, directory: str, show_output=True, get_size=False) 
     return dirsize
 
 
-def dir_size(redirector: str, directory: str, show_output=True) -> int:
+def dir_size(redirector: str, directory: str, show_output=True, acc_size=0) -> int:
     """
     Returns the directory size, calculated by the stat_dir function.
     To prevent spam, the subdirectories with sizes are only listed on DEBUG loglevel.
@@ -494,7 +495,7 @@ def copy_file_from_remote(redirector: str, remote_source: str, dest: str) -> Non
     return None
 
 
-def del_file(redirector: str, filepath: str, user: str, ask=True) -> None:
+def del_file(redirector: str, filepath: str, user: str, ask=True, verbose=True) -> None:
     """
     Function to delete files from remote.
     Note: you have to specify the RW redirector!
@@ -521,7 +522,8 @@ def del_file(redirector: str, filepath: str, user: str, ask=True) -> None:
         exit(-1)
 
     if ask:
-        log.info(f'The following file will be deleted: {filepath}')
+        if verbose:
+            log.info(f'The following file will be deleted: {filepath}')
         stat(redirector, filepath)
     if ask:
         if str(input(f"Are you sure to delete <{to_be_deleted}>? ")) == 'y':
@@ -539,11 +541,12 @@ def del_file(redirector: str, filepath: str, user: str, ask=True) -> None:
         if not status.ok:
             log.critical(f'Status: {status.message}')
         assert status.ok  # file deletion failed
-    log.info(f'file: {filepath} removed.')
+    if verbose:
+        log.info(f'file: {filepath} removed.')
     return None
 
 
-def del_dir(redirector: str, directory: str, user: str, ask=True) -> None:
+def del_dir(redirector: str, directory: str, user: str, ask=True, verbose=True) -> None:
     """
     Function to delete a directory.
     There is no recursive way available (or enabled) in xrootd.
@@ -572,17 +575,17 @@ def del_dir(redirector: str, directory: str, user: str, ask=True) -> None:
     if not status.ok:
         log.critical(f'Status: {status.message}')
     assert status.ok  # directory does not exists
-
-    log.info(f'The following files will be deleted within {directory}:')
-    ls(redirector, directory)  # list the directory content that will be deleted
+    if verbose:
+        log.info(f'The following files will be deleted within {directory}:')
+        ls(redirector, directory)  # list the directory content that will be deleted
     if ask:
-        if str(foo:=input(f'Are you sure to delete the following directory: {directory}? (y/n/all)')) == 'y':
-            print("Will delete with ask=True")
+        if str(reply:=input(f'Are you sure to delete the following directory: {directory}? (y/n/all)')) == 'y':
+            log.info("Will delete with ask=True")
             ask = True
-        elif foo == 'all':
-            print("Will delete with ask=False")
+        elif reply == 'all':
+            log.info("Will delete with ask=False")
             ask = False
-        elif foo == 'n':
+        elif reply == 'n':
             log.info('Nothing deleted.')
             return None
         else:
@@ -593,17 +596,17 @@ def del_dir(redirector: str, directory: str, user: str, ask=True) -> None:
         if file.statinfo.size == 512:  # check if "file" is a directory -> delete recursively
             log.debug(f'[rm dir] list entry: {file}')
             assert (file.statinfo.flags == 51 or file.statinfo.flags == 19)  # make sure it is a directory; evtl wrong permissions?
-            del_dir(redirector, listing.parent + file.name, user, ask)
+            del_dir(redirector, listing.parent + file.name, user, ask, verbose)
         else:
-            del_file(redirector, listing.parent + file.name, user, False)
+            del_file(redirector, listing.parent + file.name, user, False, verbose)
 
     status, _ = myclient.rmdir(directory)  # when empty, remove empty dir
     log.debug(f'[rm dir] rm status: {status}')
     if not status.ok:
         log.critical(f'Status: {status.message}')
     assert status.ok  # dir removal failed: check path or redirector
-
-    log.info('Directory removed.')
+    if verbose:
+        log.info('Directory removed.')
     return None
 
 
