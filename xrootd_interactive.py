@@ -6,7 +6,16 @@ import questionary
 from xrootd_utils import _check_file_or_directory  # , _check_redirector
 from xrootd_utils import (stat, stat_dir, ls, interactive_ls,
                           copy_file_to_remote, copy_file_from_remote, del_file, del_dir, mv, mkdir,
-                          dir_size, create_file_list)
+                          dir_size, create_file_list, get_file_size)
+
+
+def sizeof_fmt(num, suffix="B"):
+    for unit in ["", "K", "M", "G", "T", "P", "E", "Z"]:
+        if abs(num) < 1000.0:
+            return f"{num:> 6.1f} {unit}{suffix}"
+        num /= 1000.0
+    return f"{num:.1f} Yi{suffix}"
+
 
 parser = argparse.ArgumentParser(
     description='xrootd python bindings for dummies')
@@ -80,9 +89,11 @@ while True:
                                          'stat',
                                          'stat directory',
                                          'dir size',
+                                         'dir content',
                                          'rm file',
                                          'interactive file rm',
                                          'rm dir',
+                                         'interactive dir rm',
                                          'mv',
                                          'mkdir',
                                          'copy file to',
@@ -204,6 +215,60 @@ while True:
         ).ask()
         del_dir(redirector, basepath + answers1["_filepath"], user, ask=True)
 
+    ########## interactive dir rm ##########
+    if answers["_function"] == 'interactive dir rm':
+        answers1 = questionary.form(
+            _directory=questionary.text(f'In which directory you want to delete folders? \n>{basepath}')
+        ).ask()
+        dirs, files = interactive_ls(redirector, basepath + answers1["_directory"])
+        # ask if the user wants to get the file and dir sizes before deleting
+        answers2 = questionary.confirm('Do you want to determine file sizes and sort by size before deleting ?').ask()
+        if answers2:
+            log.info(f'Getting file and dir sizes for {len(dirs) + len(files)} elements, this may take a while...')
+            choices = []
+            sizes = {}
+            # get file and dir sizes
+            for i, dir in enumerate(dirs):
+                print(f'Getting size for {i} / {len(dirs) + len(files)} element', end='\r')
+                sizes[dir] = dir_size(redirector, dir, False)
+                choices.append(dir)
+            for i, file in enumerate(files):
+                print(f'Getting size for {i + len(dirs)} / {len(dirs) + len(files)} element', end='\r')
+                sizes[file] = get_file_size(redirector, file)
+                choices.append(file)
+            # sort by size
+            choices.sort(key=lambda x: sizes[x], reverse=True)
+            # now modify the choices list to add the size in front of the file/dir name
+            for i in range(len(choices)):
+                choices[i] = f'{sizeof_fmt(sizes[choices[i]]):<10} {choices[i]}'
+            # add exit option to the list
+            choices = ['exit'] + choices
+
+        else:
+            choices = ['exit'] + dirs + files
+        # now use questionary checkbox to select the files and dirs to delete
+
+        answers3 = questionary.checkbox('Which files and directories should be DELETED?', choices=choices).ask()
+        if 'exit' in answers3:
+            break
+        else:
+            # ask user if he want to check all files and dirs before deleting
+            answers4 = questionary.confirm('[WARNING] Do you want to check all files and directories before deleting?').ask()
+            if answers4:
+                ask = True
+            else:
+                ask = False
+            for selection in answers3:
+                if answers2:
+                    selection = selection[11:]
+                log.info(f'Deleting {selection}')
+                if _check_file_or_directory(redirector, selection) == 'dir':
+                    del_dir(redirector, selection, user, ask, verbose=False)
+                else:
+                    del_file(redirector, selection, user, ask, verbose=False)
+
+
+
     ########## mv ##########
     if answers["_function"] == "mv":
         answers1 = questionary.form(
@@ -257,6 +322,23 @@ while True:
                                        )
         ).ask()
         dir_size(redirector, basepath + answers1["_filepath"], True)
+
+    ########## dir content ##########
+    if answers["_function"] == 'dir content':
+        answers1 = questionary.form(
+            _directory=questionary.text(f'Show content of which folder \n>{basepath}')
+        ).ask()
+        dirs, files = interactive_ls(redirector, basepath + answers1["_directory"])
+        # now get the size of all files and dirs
+        for dir in dirs:
+            size = dir_size(redirector, dir, False)
+            log.info(f'{sizeof_fmt(size):<10} {dir}')
+        for file in files:
+            size = get_file_size(redirector, file)
+            log.info(f'{sizeof_fmt(size):<10} {file}')
+
+
+
 
     ########## create file list ##########
     if answers["_function"] == 'create file list':
