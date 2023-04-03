@@ -3,13 +3,13 @@ import logging
 
 import questionary
 
-from xrootd_utils import _check_file_or_directory  # , _check_redirector
+from xrootd_utils import _check_file_or_directory, _check_redirector
 from xrootd_utils import (stat, stat_dir, ls, interactive_ls,
                           copy_file_to_remote, copy_file_from_remote, del_file, del_dir, mv, mkdir,
                           dir_size, create_file_list, get_file_size)
 
 
-def sizeof_fmt(num, suffix="B"):
+def sizeof_fmt(num, suffix="B"):  # https://github.com/gengwg/Python/blob/master/sizeof_fmt.py
     for unit in ["", "K", "M", "G", "T", "P", "E", "Z"]:
         if abs(num) < 1000.0:
             return f"{num:> 6.1f} {unit}{suffix}"
@@ -28,6 +28,7 @@ args = vars(parser.parse_args())
 ##################################################
 basepath: str
 redirector: str
+redirector_type: str
 user: str
 ##################################################
 
@@ -49,13 +50,15 @@ user = args["user"]
 if args["redirector"] is not None:
     # set and check redirector
     redirector = args["redirector"]
-    # _check_redirector(redirector)  # not supported from dcache door
 else:
     answers0 = questionary.form(
         _redirector=questionary.select('Please select a redirector:',
                                        choices=[
-                                           'root://cmsxrootd-kit.gridka.de:1094/, (RW) [default]',
-                                           'root://cmsxrootd-redirectors.gridka.de:1094/, (RO) [not recommended]',
+                                           'root://cmsxrootd-kit.gridka.de:1094/, (RW)',
+                                           'root://cmsxrootd-redirectors.gridka.de:1094/, (RO)',
+                                           'root://xrootd-cms.infn.it:1094/, EU redirector',
+                                           'root://cmsxrootd.fnal.gov:1094/, US redirector',
+                                           'root://cms-xrd-global.cern.ch:1094/, global redirector',
                                            'other'
                                        ])
     ).ask()
@@ -68,14 +71,17 @@ else:
 
 log.info(f'Redirector selected: {redirector}')
 
+# check type of the redirector: the behaviour of the bindings may differ!!
+redirector_type = _check_redirector(redirector)  # not supported from dcache door
+log.info(f'Redirector type: {redirector_type}')
+
 # set and check base path
 basepath = args["basepath"]
 log.info(f'Selected base path: {basepath}')
 if len(basepath) > 0 and (basepath[0] != '/' or basepath[-1] != '/'):
     exit('The base path has to begin and end with a "/"!')
 
-log.info(f'Current base path: {basepath}')
-log.debug(f'All inputs: {user}, {basepath}, {redirector}, {args["loglevel"]}')
+log.debug(f'[DEBUG] All inputs: {user}, {basepath}, {redirector}, {args["loglevel"]}')
 #####################
 # Start questionary #
 #####################
