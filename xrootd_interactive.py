@@ -375,6 +375,9 @@ while True:
                                            choices=[
                                                'root://cmsxrootd-redirectors.gridka.de:1094/, (RO)',
                                                'root://cmsxrootd-kit.gridka.de:1094/, (RW)',
+                                               'root://xrootd-cms.infn.it:1094/, EU redirector',
+                                               'root://cmsxrootd.fnal.gov:1094/, US redirector',
+                                               'root://cms-xrd-global.cern.ch:1094/, global redirector',
                                                'other'
                                            ])
         ).ask()
@@ -385,6 +388,8 @@ while True:
         else:
             redirector = answers1["_redirector"].split(',')[0]
         log.info(f'Redirector changed to {redirector}')
+        redirector_type = _check_redirector(redirector)  # not supported from dcache door
+        log.info(f'Redirector type: {redirector_type}')
 
     ########## help  ##########
     if answers["_function"] == 'help':

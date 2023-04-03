@@ -66,7 +66,7 @@ def _check_redirector(redirector: str) -> None:
             redir_type = 'dcache'  # dcache door / else
         else:
             exit('Unknown redirector type. Exiting...')
-    log.debug(f'[DEBUG][check_redirector] status: {status}, type: {redir_type}')
+    log.debug(f'[DEBUG][check_redirector] status: {status}')
     return redir_type
 
 
