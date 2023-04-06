@@ -3,19 +3,10 @@ import logging
 
 import questionary
 
-from xrootd_utils import _check_file_or_directory, _check_redirector
+from xrootd_utils import _check_file_or_directory, _check_redirector, _sizeof_fmt
 from xrootd_utils import (stat, stat_dir, ls, interactive_ls,
                           copy_file_to_remote, copy_file_from_remote, del_file, del_dir, mv, mkdir,
                           dir_size, create_file_list, get_file_size)
-
-
-def sizeof_fmt(num, suffix="B"):  # https://github.com/gengwg/Python/blob/master/sizeof_fmt.py
-    for unit in ["", "K", "M", "G", "T", "P", "E", "Z"]:
-        if abs(num) < 1000.0:
-            return f"{num:> 6.1f} {unit}{suffix}"
-        num /= 1000.0
-    return f"{num:.1f} Yi{suffix}"
-
 
 parser = argparse.ArgumentParser(
     description='xrootd python bindings for dummies')
@@ -246,7 +237,7 @@ while True:
             choices.sort(key=lambda x: sizes[x], reverse=True)
             # now modify the choices list to add the size in front of the file/dir name
             for i in range(len(choices)):
-                choices[i] = f'{sizeof_fmt(sizes[choices[i]]):<10} {choices[i]}'
+                choices[i] = f'{_sizeof_fmt(sizes[choices[i]]) :<10} {choices[i]}'
             # add exit option to the list
             choices = ['exit'] + choices
 
@@ -338,10 +329,10 @@ while True:
         # now get the size of all files and dirs
         for dir in dirs:
             size = dir_size(redirector, dir, False)
-            log.info(f'{sizeof_fmt(size):<10} {dir}')
+            log.info(f'{_sizeof_fmt(size) :<10} {dir}')
         for file in files:
             size = get_file_size(redirector, file)
-            log.info(f'{sizeof_fmt(size):<10} {file}')
+            log.info(f'{_sizeof_fmt(size) :<10} {file}')
 
 
 

@@ -37,8 +37,30 @@ logging.basicConfig(format=FORMAT)
 log = logging.getLogger()
 log.setLevel(loglevel)
 
+#################### Flags ######################
+#  /xrootd/bindings/python/libs/client/flags.py #
+StatInfoFlags = {
+  'X_BIT_SET'     : 1,   #        1
+  'IS_DIR'        : 2,   #       10
+  'OTHER'         : 4,   #      100
+  'OFFLINE'       : 8,   #     1000
+  'IS_READABLE'   : 16,  #    10000
+  'IS_WRITABLE'   : 32,  #   100000
+  'POSC_PENDING'  : 64,  #  1000000
+  'BACKUP_EXISTS' : 128, # 10000000
+}
 
-########## helper functions ###############
+def _print_flags(inp_flag: int, StatInfoFlags: dict) -> None:
+    log.debug('[DEBUG] Status flags:')
+    rev_flag = bin(inp_flag)[2:][::-1]  # reverse order of inp_flag (excl. 0b) for printing
+    while len(rev_flag) < 8:  # fill with 0 for printing
+        rev_flag += '0'
+    for n, flag in enumerate(StatInfoFlags.keys()):
+        tmp = rev_flag[n]
+        log.debug(f'{rev_flag[n]} {flag}')
+#################################################
+
+############# helper functions ##################
 def _check_redirector(redirector: str) -> None:
     """
     Function to check the type of <redirector>.
@@ -71,6 +93,7 @@ def _check_redirector(redirector: str) -> None:
 
 
 def _exists(redirector: str, file_or_dir: str) -> bool:
+    #TODO remove for performance!
     """
     Helper function to check if <file_or_dir> exists.
 
@@ -97,17 +120,11 @@ def _check_file_or_directory(redirector: str, input_path: str) -> str:  # curren
     """
     Helper function to check if <input_path> is a file or a
     directory by checking the statinfo.flags.
-    The function only works, if all permissions are default!
-    This can be different for different redirectors with different configs!
-
-    Note: The function is stating each file. Therefore, this usage is only
-    recommended for single files or small directories!
 
     +++ Attention +++
-    The directory flag (51) for FileSystem.stat differs
-    from the directory flag returned by FileSystem.dirlist (19).
+    The directory flag for FileSystem.stat differs
+    from the directory flag returned by FileSystem.dirlist.
     Here, we only use the >>.stat<< flags!
-
 
     Parameters
     ----------
@@ -121,23 +138,16 @@ def _check_file_or_directory(redirector: str, input_path: str) -> str:  # curren
     """
     myclient = client.FileSystem(redirector)
     status, listing = myclient.stat(input_path, DirListFlags.STAT)  # use .stat!
+    log.debug(f'[DEBUG][check_file_or_directory] status: {status}, listing: {listing}, path: {input_path}')
+    log.debug('[DEBUG] Note: for full flag output use "stat" in DEBUG mode!')
 
-    # check if file or dir exists
-    if not _exists(redirector, input_path):
-        log.debug(f'[DEBUG][check_file_or_directory] Status: {status}')
-        exit('The file or directory does not exist!')
-
-    log.debug(f'[DEBUG][check_file_or_directory] status: {status}, listing: {listing}, {input_path}')
-
-    if listing.flags == 51 or listing.flags == 19:
-        # directories have a size of 512
-        #assert listing.size == 512  # just to make sure
+    if not status.ok:
+        exit('file or directory does not exist!')
+    # check IS_DIR flag:
+    if listing.flags & StatInfoFlags["IS_DIR"]:
         return 'dir'
-    elif listing.flags == 48 or listing.flags == 16:
-        return 'file'
     else:
-        print(listing.flags)
-        exit('Flag not in default flags. Please verify. Exiting...')
+        return 'file'
 
 
 ############## ---deprecated--- ###############
@@ -257,6 +267,14 @@ def _get_dir_list(dir_dict: dict) -> List:
     """
     return [k for k, v in dir_dict.items() if v == 1]
 
+
+def _sizeof_fmt(num, suffix="B"):  # https://github.com/gengwg/Python/blob/master/sizeof_fmt.py
+    for unit in ["", "K", "M", "G", "T", "P", "E", "Z"]:
+        if abs(num) < 1000.0:
+            return f"{num:> 6.1f} {unit}{suffix}"
+        num /= 1000.0
+    return f"{num:.1f} Yi{suffix}"
+
 ###########################################
 
 
@@ -313,6 +331,9 @@ def stat(redirector: str, input_path: str) -> None:
     log.info(f'flags: {listing.flags}')
     log.info(f'modtimestr: {listing.modtimestr}')
     log.info('-------------------------------------')
+
+    # verbose stat:
+    _print_flags(listing.flags, StatInfoFlags)
 
     return None
 
