@@ -39,6 +39,7 @@ log.setLevel(loglevel)
 
 #################### Flags ######################
 #  /xrootd/bindings/python/libs/client/flags.py #
+#################################################
 StatInfoFlags = {
   'X_BIT_SET'     : 1,   #        1
   'IS_DIR'        : 2,   #       10
@@ -51,6 +52,18 @@ StatInfoFlags = {
 }
 
 def _print_flags(inp_flag: int, StatInfoFlags: dict) -> None:
+    """
+    Function to print out the status bits of a file or directory.
+
+    Parameters
+    ----------
+    inp_flag      : int
+    StatInfoFlags : str
+
+    Returns
+    -------
+    None
+    """
     log.debug('[DEBUG] Status flags:')
     rev_flag = bin(inp_flag)[2:][::-1]  # reverse order of inp_flag (excl. 0b) for printing
     while len(rev_flag) < 8:  # fill with 0 for printing
@@ -80,6 +93,7 @@ def _check_redirector(redirector: str) -> None:
     redir_type : str
 
     status, _ = client.FileSystem(redirector).ping()
+    log.debug(f'[DEBUG][check_redirector] status: {status}')
     if status.ok:
         redir_type = 'normal'  # normal xrd redirector
     else:
@@ -89,7 +103,6 @@ def _check_redirector(redirector: str) -> None:
             redir_type = 'dcache'  # dcache door / else
         else:
             exit('Unknown redirector type. Exiting...')
-    log.debug(f'[DEBUG][check_redirector] status: {status}')
     return redir_type
 
 
@@ -99,8 +112,8 @@ def _check_file_or_directory(redirector: str, input_path: str) -> str:
     directory by checking the statinfo.flags.
 
     +++ Attention +++
-    The directory flag for FileSystem.stat differs
-    from the directory flag returned by FileSystem.dirlist.
+    The directory flag for FileSystem.stat differs from the
+    directory flag returned by FileSystem.dirlist.
     Here, we only use the >>.stat<< flags!
 
     Parameters
@@ -119,51 +132,19 @@ def _check_file_or_directory(redirector: str, input_path: str) -> str:
 
     if not status.ok:
         exit('file or directory does not exist!')
-    # check IS_DIR flag:
+    # bit comparison with IS_DIR flag:
     if listing.flags & StatInfoFlags["IS_DIR"]:
         return 'dir'
     else:
         return 'file'
 
 
-############## ---deprecated--- ###############
-''' # This is kept as an example on how to handle files on file level
-def _is_file(redirector: str, filepath: str) -> bool:
-    """
-    Helper function to verify that <filepath> exists and is a file.
-    If yes, nothing happens, if not, an error is raised.
-    Note: implementation not used anymore, since the File.stat() is buggy...
-
-    Parameters
-    ----------
-    redirector  : str
-    filepath    : str
-
-    Returns
-    -------
-    bool
-    """
-
-
-    # This sometimes takes forever, therefore, it is exchanged as the opposite of "_is_directory" :D
-    with client.File() as f:
-        f.open(redirector + filepath, OpenFlags.READ)
-        try:
-            status, stat = f.stat()
-            if not status.ok:
-                if show_output:
-                    log.critical(f'Status: {status.message}')
-            else:
-                _is_f = True
-        except ValueError as e:
-            _is_f = False
-            if show_output:
-                log.critical('File open error. Correct path? May try ls(filepath) before.')
-                log.critical(f'Exception: {e}')
-                log.debug(f'[DEBUG] {_is_f}')
-    return _is_f
-'''
-###############################################
+def _sizeof_fmt(num, suffix="B"):  # https://github.com/gengwg/Python/blob/master/sizeof_fmt.py
+    for unit in ["", "K", "M", "G", "T", "P", "E", "Z"]:
+        if abs(num) < 1000.0:
+            return f"{num:> 6.1f} {unit}{suffix}"
+        num /= 1000.0
+    return f"{num:.1f} Yi{suffix}"
 
 
 def _get_directory_listing(redirector: str, directory: str) -> Tuple[Dict[str, int], Any]:
@@ -242,15 +223,6 @@ def _get_dir_list(dir_dict: dict) -> List:
         list of directories
     """
     return [k for k, v in dir_dict.items() if v == 1]
-
-
-def _sizeof_fmt(num, suffix="B"):  # https://github.com/gengwg/Python/blob/master/sizeof_fmt.py
-    for unit in ["", "K", "M", "G", "T", "P", "E", "Z"]:
-        if abs(num) < 1000.0:
-            return f"{num:> 6.1f} {unit}{suffix}"
-        num /= 1000.0
-    return f"{num:.1f} Yi{suffix}"
-
 ###########################################
 
 
