@@ -58,6 +58,7 @@ def _print_flags(inp_flag: int, StatInfoFlags: dict) -> None:
     for n, flag in enumerate(StatInfoFlags.keys()):
         tmp = rev_flag[n]
         log.debug(f'{rev_flag[n]} {flag}')
+    log.debug('-------------------------------------')
 #################################################
 
 ############# helper functions ##################
@@ -92,7 +93,7 @@ def _check_redirector(redirector: str) -> None:
     return redir_type
 
 
-def _check_file_or_directory(redirector: str, input_path: str) -> str:  # currently only used for ls/stat
+def _check_file_or_directory(redirector: str, input_path: str) -> str:
     """
     Helper function to check if <input_path> is a file or a
     directory by checking the statinfo.flags.
@@ -115,7 +116,6 @@ def _check_file_or_directory(redirector: str, input_path: str) -> str:  # curren
     myclient = client.FileSystem(redirector)
     status, listing = myclient.stat(input_path, DirListFlags.STAT)  # use .stat!
     log.debug(f'[DEBUG][check_file_or_directory] status: {status}, listing: {listing}, path: {input_path}')
-    log.debug('[DEBUG] Note: for full flag output use "stat" in DEBUG mode!')
 
     if not status.ok:
         exit('file or directory does not exist!')
@@ -261,6 +261,8 @@ def stat(redirector: str, input_path: str) -> None:
     Here, we actually use the stat_dir function, since the file stat is buggy in the xrd
     bindings...
 
+    Note: for full flag output use "stat" in DEBUG mode!
+
     Parameters
     ----------
     redirector : str
@@ -270,26 +272,6 @@ def stat(redirector: str, input_path: str) -> None:
     -------
     None
     """
-    #############################################################################
-    """ does not work properly on file level... most outputs are 0 :-(
-    with client.File() as f:
-        f.open(redirector+input_path, OpenFlags.READ)
-        #print(f.get_data_server())  # not implemented in pyxrootd but documented lol xD
-        try:
-            status, stat = f.stat()
-        except ValueError as e:
-            log.critical(f'File open error. Correct path? May try ls(filepath) before.\n Exception: {e}')          
-            exit(-1)
-        if not status.ok:
-            log.critical(f'Status: {status.message}')
-        assert status.ok
-        print(f.is_open())
-        for entry in stat:
-            log.info(f'{entry}')
-        log.debug(f'[DEBUG] Full stat output: {stat}, Status: {status})
-    """
-    #############################################################################
-
     myclient = client.FileSystem(redirector)
     status, listing = myclient.stat(input_path, DirListFlags.STAT)  # use FS.stat!
 
@@ -419,7 +401,6 @@ def ls(redirector: str, input_path: str) -> None:
     (example: /store/user/testdir/testfile.txt/ works as well)
 
     ATTENTION: The behaviour depends on the redirector you are using.
-    The recommendation is to only use a RW redirector!
 
     Parameters
     ----------
