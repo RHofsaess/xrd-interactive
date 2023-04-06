@@ -92,30 +92,6 @@ def _check_redirector(redirector: str) -> None:
     return redir_type
 
 
-def _exists(redirector: str, file_or_dir: str) -> bool:
-    #TODO remove for performance!
-    """
-    Helper function to check if <file_or_dir> exists.
-
-    Parameters
-    ----------
-    redirector  : str
-    file_or_dir : str
-
-    Returns
-    -------
-    bool
-    """
-    myclient = client.FileSystem(redirector)
-    status, listing = myclient.stat(file_or_dir, DirListFlags.STAT)
-    log.debug(f'[DEBUG][exists] status: {status}listing: {listing}, {file_or_dir}')
-    if not status.ok:
-        exists = False
-    else:
-        exists = True
-    return exists
-
-
 def _check_file_or_directory(redirector: str, input_path: str) -> str:  # currently only used for ls/stat
     """
     Helper function to check if <input_path> is a file or a
@@ -317,8 +293,7 @@ def stat(redirector: str, input_path: str) -> None:
     myclient = client.FileSystem(redirector)
     status, listing = myclient.stat(input_path, DirListFlags.STAT)  # use FS.stat!
 
-    # check if file or dir exists
-    if not _exists(redirector, input_path):
+    if not status.ok:
         log.debug(f'[DEBUG][stat] Status: {status}')
         log.info('The file or directory does not exist!')
         return None
@@ -405,7 +380,7 @@ def get_file_size(redirector: str, file: str) -> int:
     status, listing = myclient.stat(file, DirListFlags.STAT)  # use FS.stat!
 
     # check if file or dir exists
-    if not _exists(redirector, file):
+    if not status.ok:
         log.debug(f'[DEBUG][stat] Status: {status}')
         log.info('The file or directory does not exist!')
         return None
