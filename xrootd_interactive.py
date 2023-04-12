@@ -353,13 +353,20 @@ while True:
 
     ########## change base path ##########
     if answers["_function"] == 'change base path':
-        basepath = str(input('Which basepath you want to use (default: /store/user/)?'))
-        log.info(f'Selected base path: {basepath}')
-        if basepath[0] != '/' or basepath[-1] != '/':
-            exit('The base path has to begin and end with a "/"!')
-        log.debug(f'[DEBUG] {redirector}, {basepath}')
-        stat_dir(redirector, basepath, False, False)  # check, if dir exists
-        log.info(f'Base path set to {basepath}')
+        new_basepath = str(input('Which basepath you want to use (default: /store/user/)?'))
+        log.info(f'Selected base path: {new_basepath}')
+        log.debug(f'[DEBUG] {redirector}, {new_basepath}')
+        if new_basepath[0] != '/' or new_basepath[-1] != '/':
+            log.critical('[CRITICAL] The base path has to begin and end with a "/"!')
+
+        exists = _check_file_or_directory(redirector, new_basepath)  # check, if dir exists
+        if exists == 'file':
+            log.critical('[CRITICAL] The basepath must not be a file!')
+        elif exists == 'err':
+            log.critical('[CRITICAL] The new basepath does not exist. Please try again.')
+        else:
+            basepath = new_basepath
+            log.info(f'Base path set to {basepath}')
 
     ########## change redirector ##########
     if answers["_function"] == 'change redirector':
