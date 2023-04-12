@@ -123,14 +123,15 @@ def _check_file_or_directory(redirector: str, input_path: str) -> str:
     Returns
     -------
     _type       : str
-        "dir" for directories, "file" for files
+        "dir" for directories, "file" for files, "err" for error
     """
     myclient = client.FileSystem(redirector)
     status, listing = myclient.stat(input_path, DirListFlags.STAT)  # use .stat!
     log.debug(f'[DEBUG][check_file_or_directory] status: {status}, listing: {listing}, path: {input_path}')
 
     if not status.ok:
-        exit('file or directory does not exist!')
+        log.critical('[CRITICAL][_check_file_or_directory] File or directory does not exist')
+        return 'err'
     # bit comparison with IS_DIR flag:
     if listing.flags & StatInfoFlags["IS_DIR"]:
         return 'dir'
@@ -175,10 +176,13 @@ def _get_directory_listing(redirector: str, directory: str) -> Tuple[Dict[str, i
     dir_dict = {}
     myclient = client.FileSystem(redirector)
     status, listing = myclient.dirlist(directory, DirListFlags.STAT)
+    log.debug(f'[DEBUG][_get_directory_listing] status: {status}, listing: {listing}, directory: {directory}')
+
     if not status.ok:
-        log.critical(f'[get_directory_listing] Status: {status.message}')
-        if listing is None:
-            exit('No directory given.')
+        log.critical(f'[CRITICAL][_get_directory_listing] Status: {status.message}')
+    if listing is None:
+        log.critical('[CRITICAL][_get_directory_listing] No directory given or query failed.')
+        return dir_dict, None  # return empty
 
     for entry in listing:
         log.debug(f'[DEBUG][get_directory_listing] Info: {entry}')
@@ -223,6 +227,58 @@ def _get_dir_list(dir_dict: dict) -> List:
     return [k for k, v in dir_dict.items() if v == 1]
 
 
+def _get_file_size(redirector: str, file: str) -> int:
+    """
+    Returns the file size, calculated by the stat function.
+    To prevent spam, the file size is only listed on DEBUG loglevel.
+
+    Parameters
+    ----------
+    redirector  : str
+    file        : str
+
+    Returns
+    -------
+    int
+        file size in Byte, -999 for error
+    """
+    myclient = client.FileSystem(redirector)
+    status, listing = myclient.stat(file, DirListFlags.STAT)  # use FS.stat!
+    log.debug(f'[DEBUG][_get_file_size] status: {status}, listing: {listing}, file: {file}')
+
+    # check if file or dir exists
+    if not status.ok:
+        log.critical(f'[CRITICAL][_get_file_size] The file or directory does not exist!')
+        return -999
+    return listing.size
+
+
+def _get_dir_size(redirector: str, directory: str, show_output=True, acc_size=0) -> int:
+    """
+    Returns the directory size, calculated by the stat_dir function.
+    To prevent spam, the subdirectories with sizes are only listed on DEBUG loglevel.
+
+    Parameters
+    ----------
+    redirector  : str
+    directory   : str
+    show_output : bool
+
+    Returns
+    -------
+    int
+        directory size in Byte, -999 for error
+    """
+    dirsize = stat_dir(redirector, directory, False, True)  # don't show output, get size
+    if dirsize == -999:
+        log.critical(f'[CRITICAL][_get_dir_size] stat dir failed.')
+        return -999
+    GiB = dirsize / (1 << 30)
+    log.debug(f'[DEBUG] Directory size of {directory}: GiB: {GiB}')
+    if show_output:
+        log.info(f'Byte: {dirsize} (GiB: {GiB}G)')
+    return dirsize
+
 ###########################################
 
 
@@ -246,13 +302,12 @@ def stat(redirector: str, input_path: str) -> None:
     """
     myclient = client.FileSystem(redirector)
     status, listing = myclient.stat(input_path, DirListFlags.STAT)  # use FS.stat!
+    log.debug(f'[DEBUG][stat] status: {status}, listing: {listing}, input_path: {input_path}')
 
     if not status.ok:
-        log.debug(f'[DEBUG][stat] Status: {status}')
-        log.info('The file or directory does not exist!')
+        log.critical(f'[CRITICAL][stat] The file or directory does not exist!')
         return None
 
-    log.debug(f'[DEBUG][stat] status: {status}, listing: {listing}, {input_path}')
     log.info('-------------------------------------')
     log.info(f'name: {input_path}')
     log.info(f'id: {listing.id}\n (++++ Note: ID is broken with the python bindings. Please use xrdfs stat ++++)')
@@ -268,7 +323,8 @@ def stat(redirector: str, input_path: str) -> None:
 
 def stat_dir(redirector: str, directory: str, show_output=True, get_size=False) -> int:
     """
-    xrdfs binding for stat on <directory>
+    xrdfs binding for stat on <directory>.
+    It is also used as helper hunction for getting the directory size.
 
     Parameters
     ----------
@@ -280,14 +336,16 @@ def stat_dir(redirector: str, directory: str, show_output=True, get_size=False) 
     Returns
     -------
     int
-        directory size if get_size=True, else 0
+        directory size if get_size=True, else 0 ,-999 for error
     """
-
     myclient = client.FileSystem(redirector)
     status, listing = myclient.dirlist(directory, DirListFlags.STAT)
+    log.debug(f'[DEBUG][stat_dir] status: {status}, listing: {listing}, directory: {directory}, '
+              f'show_output: {show_output}, get_size: {get_size}')
+
     if not status.ok:
-        log.critical(f'[stat dir] Status: {status.message}')
-    assert status.ok  # stat on dir failed, does the dir exist?
+        log.critical(f'[CRITICAL][stat dir] Failed.')
+        return -999
 
     dirsize = 0
 
@@ -306,69 +364,15 @@ def stat_dir(redirector: str, directory: str, show_output=True, get_size=False) 
     if get_size:
         for entry in listing:
             if entry.statinfo.flags & StatInfoFlags["IS_DIR"]:
-                dirsize += dir_size(redirector, listing.parent + entry.name, False)
+                dirsize += _get_dir_size(redirector, listing.parent + entry.name, False)
             else:
                 dirsize += entry.statinfo.size
     return dirsize
 
 
-def get_file_size(redirector: str, file: str) -> int:
-    """
-    Returns the file size, calculated by the stat function.
-    To prevent spam, the file size is only listed on DEBUG loglevel.
-
-    Parameters
-    ----------
-    redirector  : str
-    file        : str
-    show_output : bool
-
-    Returns
-    -------
-    int
-        file size in Byte
-    """
-    myclient = client.FileSystem(redirector)
-    status, listing = myclient.stat(file, DirListFlags.STAT)  # use FS.stat!
-
-    # check if file or dir exists
-    if not status.ok:
-        log.debug(f'[DEBUG][stat] Status: {status}')
-        log.info('The file or directory does not exist!')
-        return None
-    return listing.size
-
-
-def dir_size(redirector: str, directory: str, show_output=True, acc_size=0) -> int:
-    """
-    Returns the directory size, calculated by the stat_dir function.
-    To prevent spam, the subdirectories with sizes are only listed on DEBUG loglevel.
-
-    Parameters
-    ----------
-    redirector  : str
-    directory   : str
-    show_output : bool
-
-    Returns
-    -------
-    int
-        directory size in Byte
-    """
-    dirsize = stat_dir(redirector, directory, False, True)  # don't show output, get size
-    GiB = dirsize / (1 << 30)
-    log.debug(f'[DEBUG] Directory size of {directory}: GiB: {GiB}')
-    if show_output:
-        log.info(f'Byte: {dirsize} (GiB: {GiB}G)')
-    return dirsize
-
-
 def ls(redirector: str, input_path: str) -> None:
     """
-    xrdfs ls: the exact behavior is mirrored
-    Note: when a filepath is appended with a '/', it is stated anyway
-    This behaviour is according to xrdfs ls...
-    (example: /store/user/testdir/testfile.txt/ works as well)
+    xrdfs ls
 
     ATTENTION: The behaviour depends on the redirector you are using.
 
@@ -382,28 +386,40 @@ def ls(redirector: str, input_path: str) -> None:
     None
     """
     # check, if <directory> is a file. If yes, just print the path (like xrdfs ls)
-    if _check_file_or_directory(redirector, input_path) == 'file':
+    _type = _check_file_or_directory(redirector, input_path)
+    if _type == 'err':
+        log.debug('[DEBUG][ls] _check_file_or_directory failed.')
+        return None
+    elif _type == 'file':
         log.info(f'{input_path}')
         return None
 
     _, listing = _get_directory_listing(redirector, input_path)
+    if listing is None:
+        log.debug('[DEBUG][ls] _get_directory_listing failed.')
+        return None
 
     log.info(f'{listing.parent}, N: {listing.size}')
     for entry in listing:
         if entry.statinfo.flags & StatInfoFlags["IS_DIR"]:
-            _type = '(dir)'
+            _file_or_dir = '(dir)'
         else:
-            _type = '(file)'
+            _file_or_dir = '(file)'
         log.info('{0} {1:>10} {2} {3}'.format(
-            entry.statinfo.modtimestr, entry.statinfo.size, entry.name, _type)
+            entry.statinfo.modtimestr, entry.statinfo.size, entry.name, _file_or_dir)
         )
     return None
 
 
 def interactive_ls(redirector: str, directory: str) -> Tuple[List, List]:
     dir_dict, listing = _get_directory_listing(redirector, directory)
-    dirs = list(_get_dir_list(dir_dict))  # convert to list for type hints...
-    files = list(_get_file_list(dir_dict))  # convert to list for type hints...
+    dirs = []
+    files = []
+    if listing is None:
+        log.critical('[CRITICAL][interactive ls] _get_directory_listing failed.')
+        return dirs, files  # in case of ERROR, the interactive lists are empty
+    dirs = _get_dir_list(dir_dict)
+    files = _get_file_list(dir_dict)
     return dirs, files
 
 
@@ -429,11 +445,11 @@ def copy_file_to_remote(redirector: str, source: str, dest: str) -> None:
     """
     myclient = client.FileSystem(redirector)
     status, _ = myclient.copy('file://' + source, redirector + dest, force=False)  # force: overwrite target!
-    log.debug(f'[DEBUG][copy to] Status: {status}')
-    if not status.ok:
-        log.critical(f'Status: {status.message}')
-    assert status.ok  # forgot filename on dest, file exists, or RO redirector?
+    log.debug(f'[DEBUG][copy to] Status: {status}, source: {source}, dest: {dest}')
 
+    if not status.ok:
+        log.critical(f'[CRITICAL] Failed.')
+        return None
     log.info(f'File {source} copied to {dest}.')
     return None
 
@@ -459,10 +475,11 @@ def copy_file_from_remote(redirector: str, remote_source: str, dest: str) -> Non
     """
     myclient = client.FileSystem(redirector)
     status, _ = myclient.copy(redirector + remote_source, 'file://' + dest, force=False)
-    log.debug(f'[DEBUG][copy from] Status: {status}')
+    log.debug(f'[DEBUG][copy from] Status: {status.message}, remote_source: {remote_source}, dest: {dest}')
+
     if not status.ok:
-        log.critical(f'Status: {status.message}')
-    assert status.ok
+        log.critical(f'[CRITICAL] Failed.')
+        return None
 
     log.info(f'File {remote_source} copied to {dest}.')
     return None
@@ -479,6 +496,7 @@ def del_file(redirector: str, filepath: str, user: str, ask=True, verbose=True) 
     filepath   : str
     user       : str
     ask        : bool
+    verbose    : bool
 
     Returns
     -------
@@ -491,8 +509,8 @@ def del_file(redirector: str, filepath: str, user: str, ask=True, verbose=True) 
     if user in filepath:
         log.debug(f'[DEBUG] {user} tries to delete {filepath}')
     else:
-        log.critical('Permission denied. Your username was not found in the filepath!')
-        exit(-1)
+        log.critical('[CRITICAL] Permission denied. Your username was not found in the filepath!')
+        return None
 
     if ask:
         if verbose:
@@ -501,19 +519,19 @@ def del_file(redirector: str, filepath: str, user: str, ask=True, verbose=True) 
     if ask:
         if str(input(f"Are you sure to delete <{to_be_deleted}>? ")) == 'y':
             status, _ = myclient.rm(filepath)
-            log.debug(f'[DEBUG][rm] Status: {status}')
+            log.debug(f'[DEBUG][rm] Status: {status}, filepath: {filepath}, user: {user}, ask: {ask}, verbose: {verbose}')
             if not status.ok:
-                log.critical(f'Status: {status.message}')
-            assert status.ok  # file deletion failed; RO redirector?
+                log.critical(f'[CRITICAL] Failed.')
+                return None
         else:
-            log.critical("failed.")
+            log.critical("[CRITICAL] Aborted.")
             return None
     else:
         status, _ = myclient.rm(filepath)
-        log.debug(f'[DEBUG][rm] Status: {status}')
+        log.debug(f'[DEBUG][rm] Status: {status}, filepath: {filepath}, user: {user}, ask: {ask}, verbose: {verbose}')
         if not status.ok:
-            log.critical(f'Status: {status.message}')
-        assert status.ok  # file deletion failed
+            log.critical(f'[CRITICAL] Failed.')
+            return None
     if verbose:
         log.info(f'file: {filepath} removed.')
     return None
@@ -531,6 +549,7 @@ def del_dir(redirector: str, directory: str, user: str, ask=True, verbose=True) 
     directory  : str
     user       : str
     ask        : bool
+    verbose    : bool
 
     Returns
     -------
@@ -539,15 +558,16 @@ def del_dir(redirector: str, directory: str, user: str, ask=True, verbose=True) 
     if user in directory:
         log.debug(f'[DEBUG] {user} tries to delete {directory}')
     else:
-        log.critical('Permission denied. Your username was not found in the directory path!')
-        exit(-1)
+        log.critical('[CRITICAL] Permission denied. Your username was not found in the directory path!')
+        return None
 
     myclient = client.FileSystem(redirector)
     status, listing = myclient.dirlist(directory, DirListFlags.STAT)
-    log.debug(f'[DEBUG][rm dir] Status: {status}')
+    log.debug(f'[DEBUG][rm dir] Status: {status}, directory: {directory}, user: {user}, ask: {ask}, verbose: {verbose}')
+
     if not status.ok:
-        log.critical(f'Status: {status.message}')
-    assert status.ok  # directory does not exists
+        log.critical(f'Failed. Status: {status.message}')
+        return None
     if verbose:
         log.info(f'The following files will be deleted within {directory}:')
         ls(redirector, directory)  # list the directory content that will be deleted
@@ -562,7 +582,7 @@ def del_dir(redirector: str, directory: str, user: str, ask=True, verbose=True) 
             log.info('Nothing deleted.')
             return None
         else:
-            log.critical('failed.')
+            log.critical('[CRITICAL] Failed.')
             return None
 
     for file in listing:
@@ -576,8 +596,8 @@ def del_dir(redirector: str, directory: str, user: str, ask=True, verbose=True) 
     status, _ = myclient.rmdir(directory)  # when empty, remove empty dir
     log.debug(f'[DEBUG][rm dir] rm status: {status}')
     if not status.ok:
-        log.critical(f'Status: {status.message}')
-    assert status.ok  # dir removal failed: check path or redirector
+        log.critical(f'Failed. Status: {status.message}')
+        return None
     if verbose:
         log.info('Directory removed.')
     return None
@@ -604,10 +624,12 @@ def mv(redirector: str, source: str, dest: str) -> None:
     myclient = client.FileSystem(redirector)
     log.info(f'mv: {source} to {dest}')
     status, _ = myclient.mv(source, dest)
-    log.debug(f'[DEBUG][mv] Status: {status}')
+    log.debug(f'[DEBUG][mv] Status: {status}, source: {source}, dest: {dest}')
+
     if not status.ok:
-        log.critical(f'Status: {status.message}')
-    assert status.ok
+        log.critical(f'[CRITICAL] Failed')
+        return None
+    log.info('File or directory moved.')
     return None
 
 
@@ -626,11 +648,11 @@ def mkdir(redirector: str, directory: str) -> None:
     """
     myclient = client.FileSystem(redirector)
     status, _ = myclient.mkdir(directory, MkDirFlags.MAKEPATH)
-    log.debug(f'[DEBUG][mkdir] Status: {status}')
-    if not status.ok:
-        log.critical(f'Status: {status.message}')
-    assert status.ok  # creation failed; RO redirector?
+    log.debug(f'[DEBUG][mkdir] Status: {status}, directory: {directory}')
 
+    if not status.ok:
+        log.critical(f'[CRITICAL] Failed.')
+        return None
     log.info(f'{directory} created.')
     return None
 
@@ -650,11 +672,11 @@ def locate(redirector: str, filepath: str) -> bool:
     """
     myclient = client.FileSystem(redirector)
     status, locations = myclient.locate(filepath, OpenFlags.REFRESH)
-    log.debug(f'[DEBUG][locate] Status: {status}')
-    if not status.ok:
-        log.critical(f'Status: {status.message}')
-    assert status.ok
+    log.debug(f'[DEBUG][locate] Status: {status}, filepath: {filepath}')
 
+    if not status.ok:
+        log.critical(f'[CRITICAL] Failed.')
+        return False  # file cannot be located
     log.info(locations)
     return True
 
@@ -675,7 +697,7 @@ def create_file_list(redirector: str, directory: str, exclude: str) -> None:
     -------
     None
     """
-    log.debug(f'[DEBUG][create file list] directory: {directory}')
+    log.debug(f'[DEBUG][create file list] directory: {directory}, exclude: {exclude}')
     dir_dict, _ = _get_directory_listing(redirector, directory)
     dir_str = directory.replace('/', '_')
     output_name = f'list{dir_str}.txt'

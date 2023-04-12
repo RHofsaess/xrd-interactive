@@ -6,7 +6,7 @@ import questionary
 from xrootd_utils import _check_file_or_directory, _check_redirector, _sizeof_fmt
 from xrootd_utils import (stat, stat_dir, ls, interactive_ls,
                           copy_file_to_remote, copy_file_from_remote, del_file, del_dir, mv, mkdir,
-                          dir_size, create_file_list, get_file_size)
+                          _get_dir_size, create_file_list, _get_file_size)
 
 parser = argparse.ArgumentParser(
     description='xrootd python bindings for dummies')
@@ -142,7 +142,11 @@ while True:
                     '------Files (will be stated):------'] + files
                 current_dir = '/'.join(current_dir.split('/')[:-2])
                 continue
-            if _check_file_or_directory(redirector, answers2["_directory"]) == 'dir':
+            _type = _check_file_or_directory(redirector, answers2["_directory"])
+            if _type == 'err':
+                log.critical('[CRITICAL]This should not happen but is an ERROR anyway!')
+                break
+            elif _type == 'dir':
                 dirs, files = interactive_ls(redirector, answers2["_directory"])
                 choices = ['exit'] + ['..'] + ['------Directories:------'] + dirs + [
                     '------Files (will be stated):------'] + files
@@ -229,11 +233,11 @@ while True:
             # get file and dir sizes
             for i, dir in enumerate(dirs):
                 print(f'Getting size for {i} / {len(dirs) + len(files)} element', end='\r')
-                sizes[dir] = dir_size(redirector, dir, False)
+                sizes[dir] = _get_dir_size(redirector, dir, False)  # -999 means ERROR
                 choices.append(dir)
             for i, file in enumerate(files):
                 print(f'Getting size for {i + len(dirs)} / {len(dirs) + len(files)} element', end='\r')
-                sizes[file] = get_file_size(redirector, file)
+                sizes[file] = _get_file_size(redirector, file)  # -999 means ERROR
                 choices.append(file)
             # sort by size
             choices.sort(key=lambda x: sizes[x], reverse=True)
@@ -320,7 +324,7 @@ while True:
             _filepath=questionary.text(f'Which directory? \n >{basepath}'
                                        )
         ).ask()
-        dir_size(redirector, basepath + answers1["_filepath"], True)
+        _get_dir_size(redirector, basepath + answers1["_filepath"], True)
 
     ########## dir content ##########
     if answers["_function"] == 'dir content':
@@ -330,14 +334,11 @@ while True:
         dirs, files = interactive_ls(redirector, basepath + answers1["_directory"])
         # now get the size of all files and dirs
         for dir in dirs:
-            size = dir_size(redirector, dir, False)
+            size = _get_dir_size(redirector, dir, False)  # -999 means ERROR
             log.info(f'{_sizeof_fmt(size) :<10} {dir}')
         for file in files:
-            size = get_file_size(redirector, file)
+            size = _get_file_size(redirector, file)  # -999 means ERROR
             log.info(f'{_sizeof_fmt(size) :<10} {file}')
-
-
-
 
     ########## create file list ##########
     if answers["_function"] == 'create file list':
