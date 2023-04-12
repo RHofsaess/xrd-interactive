@@ -54,6 +54,7 @@ StatInfoFlags = {
 def _print_flags(inp_flag: int, StatInfoFlags: dict) -> None:
     """
     Function to print out the status bits of a file or directory.
+    Note: only prints in DEBUG mode to reduce spam!
 
     Parameters
     ----------
@@ -75,7 +76,7 @@ def _print_flags(inp_flag: int, StatInfoFlags: dict) -> None:
 #################################################
 
 ############# helper functions ##################
-def _check_redirector(redirector: str) -> None:
+def _check_redirector(redirector: str) -> str:
     """
     Function to check the type of <redirector>.
     Note: The behaviour of some bindings change
@@ -111,11 +112,6 @@ def _check_file_or_directory(redirector: str, input_path: str) -> str:
     Helper function to check if <input_path> is a file or a
     directory by checking the statinfo.flags.
 
-    +++ Attention +++
-    The directory flag for FileSystem.stat differs from the
-    directory flag returned by FileSystem.dirlist.
-    Here, we only use the >>.stat<< flags!
-
     Parameters
     ----------
     redirector  : str
@@ -140,6 +136,18 @@ def _check_file_or_directory(redirector: str, input_path: str) -> str:
 
 
 def _sizeof_fmt(num, suffix="B"):  # https://github.com/gengwg/Python/blob/master/sizeof_fmt.py
+    """
+    Function to convert units.
+
+    Parameters
+    ----------
+    num     : int
+    suffix  : str
+
+    Returns
+    -------
+        size in desired format
+    """
     for unit in ["", "K", "M", "G", "T", "P", "E", "Z"]:
         if abs(num) < 1000.0:
             return f"{num:> 6.1f} {unit}{suffix}"
@@ -150,7 +158,6 @@ def _sizeof_fmt(num, suffix="B"):  # https://github.com/gengwg/Python/blob/maste
 def _get_directory_listing(redirector: str, directory: str) -> Tuple[Dict[str, int], Any]:
     """
     Returns the files and directories within a directory as a dict.
-    Note: A small workaround is used for the type check to spare the storage servers
 
     Parameters
     ----------
@@ -165,29 +172,17 @@ def _get_directory_listing(redirector: str, directory: str) -> Tuple[Dict[str, i
     dir_dict = {}
     myclient = client.FileSystem(redirector)
     status, listing = myclient.dirlist(directory, DirListFlags.STAT)
-    log.debug(f'[DEBUG][get_directory_listing] Status: {status.message}')
     if not status.ok:
         log.critical(f'[get_directory_listing] Status: {status.message}')
-    assert status.ok  # directory or redirector faulty
+        if listing == None:
+            exit('No directory given.')
 
     for entry in listing:
-        #####################################################################################
-        # the correct way would be to check each file:                                      #
-        # if _check_file_or_directory(redirector, listing.parent + entry.name) == 'file':   #
-        #    dir_listing[f"{listing.parent + entry.name}"] = 0                              #
-        # elif _check_file_or_directory(redirector, listing.parent + entry.name) == 'dir':  #
-        #    dir_listing[f"{listing.parent + entry.name}"] = 1                              #
-        #####################################################################################
-        # faster way to check if file or dir: less DDOS with only one query
-        if entry.statinfo.flags == 51 or entry.statinfo.flags == 19:
-            # directories have a size of 512
-            assert (entry.statinfo.size == 512)  # just to make sure for the recursive stuff
+        log.debug(f'[DEBUG][get_directory_listing] Info: {entry}')
+        if entry.statinfo.flags & StatInfoFlags["IS_DIR"]:
             dir_dict[f"{listing.parent + entry.name}/"] = 1
-        elif entry.statinfo.flags == 48 or entry.statinfo.flags == 16:
-            dir_dict[f"{listing.parent + entry.name}"] = 0
         else:
-            log.debug(f'[DEBUG][get_directory_listing] Info: {entry}')
-            exit("Unknown flags. RO files, strange permissions?")
+            dir_dict[f"{listing.parent + entry.name}"] = 0
     return dir_dict, listing
 
 
@@ -263,7 +258,6 @@ def stat(redirector: str, input_path: str) -> None:
 
     # verbose stat:
     _print_flags(listing.flags, StatInfoFlags)
-
     return None
 
 
@@ -338,7 +332,6 @@ def get_file_size(redirector: str, file: str) -> int:
         log.debug(f'[DEBUG][stat] Status: {status}')
         log.info('The file or directory does not exist!')
         return None
-
     return listing.size
 
 def dir_size(redirector: str, directory: str, show_output=True, acc_size=0) -> int:
