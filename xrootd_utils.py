@@ -174,7 +174,7 @@ def _get_directory_listing(redirector: str, directory: str) -> Tuple[Dict[str, i
     status, listing = myclient.dirlist(directory, DirListFlags.STAT)
     if not status.ok:
         log.critical(f'[get_directory_listing] Status: {status.message}')
-        if listing == None:
+        if listing is None:
             exit('No directory given.')
 
     for entry in listing:
@@ -300,8 +300,7 @@ def stat_dir(redirector: str, directory: str, show_output=True, get_size=False) 
 
     if get_size:
         for entry in listing:
-            if entry.statinfo.size == 512:
-                assert (entry.statinfo.flags == 51 or entry.statinfo.flags == 19)  # make sure it's a directory
+            if entry.statinfo.flags & StatInfoFlags["IS_DIR"]:
                 dirsize += dir_size(redirector, listing.parent + entry.name, False)
             else:
                 dirsize += entry.statinfo.size
@@ -333,6 +332,7 @@ def get_file_size(redirector: str, file: str) -> int:
         log.info('The file or directory does not exist!')
         return None
     return listing.size
+
 
 def dir_size(redirector: str, directory: str, show_output=True, acc_size=0) -> int:
     """
@@ -385,17 +385,12 @@ def ls(redirector: str, input_path: str) -> None:
 
     log.info(f'{listing.parent}, N: {listing.size}')
     for entry in listing:
-        # different way to check if dir or file (see above)
-        if entry.statinfo.size == 512 and '.' not in entry.name:
-            _is_dir = '(dir)'
-        elif entry.statinfo.size == 512 and '.' in entry.name:
-            _is_dir = '(dir) [TO BE REVIEWED BECAUSE OF "."]'
-            log.debug(f'[DEBUG][ls] entry: {entry}')
-            assert (entry.statinfo.flags == 51 or entry.statinfo.flags == 19)  # to make sure it is a directory; evtl wrong permissions?
+        if entry.statinfo.flags & StatInfoFlags["IS_DIR"]:
+            _type = '(dir)'
         else:
-            _is_dir = '(file)'
+            _type = '(file)'
         log.info('{0} {1:>10} {2} {3}'.format(
-            entry.statinfo.modtimestr, entry.statinfo.size, entry.name, _is_dir)
+            entry.statinfo.modtimestr, entry.statinfo.size, entry.name, _type)
         )
     return None
 
@@ -523,7 +518,7 @@ def del_dir(redirector: str, directory: str, user: str, ask=True, verbose=True) 
     """
     Function to delete a directory.
     There is no recursive way available (or enabled) in xrootd.
-    Therefore, looping over all files and removeing them is the only way...
+    Therefore, looping over all files and removing them is the only way...
 
     Parameters
     ----------
@@ -564,11 +559,11 @@ def del_dir(redirector: str, directory: str, user: str, ask=True, verbose=True) 
         else:
             log.critical('failed.')
             return None
-    for file in listing:  # unfortunately, there is no recursive way in xrd...
+
+    for file in listing:
         log.debug(f'[DEBUG] {redirector}{listing.parent}{file.name}')
-        if file.statinfo.size == 512:  # check if "file" is a directory -> delete recursively
+        if file.statinfo.flags & StatInfoFlags["IS_DIR"]:  # check if "file" is a directory -> delete recursively
             log.debug(f'[DEBUG][rm dir] list entry: {file}')
-            assert (file.statinfo.flags == 51 or file.statinfo.flags == 19)  # make sure it is a directory; evtl wrong permissions?
             del_dir(redirector, listing.parent + file.name, user, ask, verbose)
         else:
             del_file(redirector, listing.parent + file.name, user, False, verbose)
