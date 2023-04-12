@@ -63,8 +63,10 @@ else:
 log.info(f'Redirector selected: {redirector}')
 
 # check type of the redirector: the behaviour of the bindings may differ!!
-redirector_type = _check_redirector(redirector)  # not supported from dcache door
-log.info(f'Redirector type: {redirector_type}')
+redirector_type = _check_redirector(redirector)
+log.debug(f'[DEBUG] Redirector type: {redirector_type}')
+if redirector_type in ['fatal', 'unknown']:
+    exit('Faulty redirector, please try again!')
 
 # set and check base path
 basepath = args["basepath"]
@@ -373,14 +375,21 @@ while True:
                                            ])
         ).ask()
         if answers1["_redirector"] == 'other':
-            redirector = str(input('Which redirector you want to use?'))
-            if len(redirector) == 0:
-                exit('No redirector specified!')
+            inp = str(input('Which redirector you want to use?'))
+            redirector_type = _check_redirector(inp)
+            if len(inp) == 0:
+                log.critical('[CRITICAL][change redirector] No redirector specified!')
+            elif redirector_type in ['fatal', 'unknown']:
+                log.critical('[CRITICAL][change redirector] Faulty redirector! Please try again.')
+            else:  # if all checks are passed, set the new redirector
+                redirector = inp
+                log.info(f'Redirector changed to {redirector}')
+                log.info(f'Redirector type: {redirector_type}')  # already set above
         else:
             redirector = answers1["_redirector"].split(',')[0]
-        log.info(f'Redirector changed to {redirector}')
-        redirector_type = _check_redirector(redirector)  # not supported from dcache door
-        log.info(f'Redirector type: {redirector_type}')
+            log.info(f'Redirector changed to {redirector}')
+            redirector_type = _check_redirector(redirector)
+            log.info(f'Redirector type: {redirector_type}')
 
     ########## help  ##########
     if answers["_function"] == 'help':
